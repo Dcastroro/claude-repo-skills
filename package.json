@@ -1,0 +1,34 @@
+{
+  "name": "claude-repo-skills",
+  "version": "0.1.0",
+  "description": "Generate repository-aware Claude Code skills from real project structure and conventions.",
+  "type": "module",
+  "bin": {
+    "claude-repo-skills": "./bin/claude-repo-skills.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "lint": "node --check bin/claude-repo-skills.mjs && node --check src/*.mjs",
+    "check": "npm run lint && npm test",
+    "demo": "node bin/claude-repo-skills.mjs inspect ."
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "claude-code",
+    "skills",
+    "repository-analysis",
+    "developer-tools"
+  ],
+  "license": "MIT"
+}

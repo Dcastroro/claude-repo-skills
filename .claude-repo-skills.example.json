@@ -1,0 +1,25 @@
+{
+  "output": ".claude/skills",
+  "includeDocs": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "README.md",
+    "docs",
+    ".claude/rules"
+  ],
+  "exclude": [
+    ".git",
+    "node_modules",
+    ".next",
+    "dist",
+    "build",
+    "coverage",
+    "vendor"
+  ],
+  "maxSourceBytes": 128000,
+  "skills": [
+    "development",
+    "domain",
+    "quality"
+  ]
+}
