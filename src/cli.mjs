@@ -1,8 +1,11 @@
-import { existsSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { analyzeRepository } from "./analyze.mjs";
 import { defaultConfig } from "./config.mjs";
 import { checkSkills, generateSkills } from "./generate.mjs";
+
+const PACKAGE_JSON_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
 
 const HELP = `claude-repo-skills <command> [repository] [options]
 
@@ -13,16 +16,19 @@ Commands:
   check      Fail when generated skills are missing or stale
 
 Options:
-  --config <path>   Use a custom configuration file
+  --config <path>   Use a custom configuration file (resolved against the
+                     current working directory, not the target repository)
   --dry-run         Show generated files without writing
   --json            Emit machine-readable JSON
+  --version         Show the CLI version
   --help            Show this help
 `;
 
-function parse(argv) {
+export function parse(argv) {
   const values = [...argv];
   const command = values.shift() ?? "help";
   if (command === "--help" || command === "-h") return { command: "help" };
+  let resolvedCommand = command === "--version" || command === "-v" ? "version" : command;
   let root = ".";
   let configPath;
   let dryRun = false;
@@ -33,10 +39,11 @@ function parse(argv) {
     else if (value === "--dry-run") dryRun = true;
     else if (value === "--json") json = true;
     else if (value === "--help") return { command: "help" };
+    else if (value === "--version" || value === "-v") resolvedCommand = "version";
     else if (!value.startsWith("-")) root = value;
     else throw new Error(`Unknown option: ${value}`);
   }
-  return { command, root: resolve(root), configPath, dryRun, json };
+  return { command: resolvedCommand, root: resolve(root), configPath, dryRun, json };
 }
 
 function print(value, json) {
@@ -46,6 +53,10 @@ function print(value, json) {
 export async function runCli(argv) {
   const args = parse(argv);
   if (args.command === "help") return print(HELP, false);
+  if (args.command === "version") {
+    const { version } = JSON.parse(readFileSync(PACKAGE_JSON_PATH, "utf8"));
+    return print(args.json ? { version } : version, args.json);
+  }
   if (!["init", "inspect", "generate", "check"].includes(args.command)) throw new Error(`Unknown command: ${args.command}`);
 
   if (args.command === "init") {
@@ -65,6 +76,7 @@ export async function runCli(argv) {
       `Modules: ${view.modules.length}`,
       `Tests: ${view.tests.length}`,
       `Docs: ${view.docs.length}`,
+      ...(view.warnings.length ? [`Warnings:\n${view.warnings.map((warning) => `- ${warning}`).join("\n")}`] : []),
     ].join("\n"), args.json);
   }
 
@@ -75,7 +87,8 @@ export async function runCli(argv) {
 
   const result = checkSkills(analysis);
   if (result.stale.length) {
-    print(args.json ? result : `Stale generated skills:\n${result.stale.map((path) => `- ${path}`).join("\n")}`, args.json);
+    const label = result.missing.length === result.stale.length ? "Missing generated skills" : "Stale generated skills";
+    print(args.json ? result : `${label}:\n${result.stale.map((path) => `- ${path}`).join("\n")}`, args.json);
     process.exitCode = 1;
     return;
   }

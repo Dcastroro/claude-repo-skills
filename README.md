@@ -46,6 +46,12 @@ npx claude-repo-skills init .
 Use `--dry-run` to inspect the planned output and `--json` for CI or other
 automation.
 
+`--config <path>` is resolved against the current working directory (not the
+target repository) so a relative path behaves the way it would for any other
+CLI flag, e.g. `npx claude-repo-skills check /path/to/repository --config
+./ci/repo-skills.json`. Omit `--config` to use `.claude-repo-skills.json`
+inside the target repository itself.
+
 ## Configuration
 
 `.claude-repo-skills.json` supports:

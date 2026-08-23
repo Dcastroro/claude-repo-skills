@@ -35,6 +35,56 @@ test("detects stack, modules, tests, and repository instructions", async () => {
   }
 });
 
+test("digest is stable when an unrelated file is added or removed", async () => {
+  const root = await fixture();
+  try {
+    const before = analyzeRepository(root);
+    await writeFile(join(root, "unrelated-notes.txt"), "this does not feed generation");
+    const after = analyzeRepository(root);
+    assert.equal(after.digest, before.digest);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("digest changes when documentation content feeding generation changes", async () => {
+  const root = await fixture();
+  try {
+    const before = analyzeRepository(root);
+    await writeFile(join(root, "AGENTS.md"), "# Rules\nKeep boundaries explicit, updated.");
+    const after = analyzeRepository(root);
+    assert.notEqual(after.digest, before.digest);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("detects README.md nested inside packages/ and apps/ module directories", async () => {
+  const root = await fixture();
+  try {
+    await mkdir(join(root, "packages/widgets"), { recursive: true });
+    await writeFile(join(root, "packages/widgets/README.md"), "# Widgets package\nDetails.");
+    const result = analyzeRepository(root);
+    assert.match(result.documentContent["packages/widgets/README.md"], /Widgets package/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("warns about a documentation file skipped for exceeding maxSourceBytes", async () => {
+  const root = await fixture();
+  try {
+    await writeFile(join(root, "README.md"), "x".repeat(200));
+    const { loadConfig } = await import("../src/config.mjs");
+    const config = { ...loadConfig(root), maxSourceBytes: 50 };
+    const result = analyzeRepository(root, { config });
+    assert.equal(result.documentContent["README.md"], undefined);
+    assert.ok(result.warnings.some((warning) => warning.includes("README.md") && warning.includes("maxSourceBytes")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("does not traverse symlinked directories", async () => {
   const root = await fixture();
   const outside = await mkdtemp(join(tmpdir(), "claude-repo-skills-outside-"));

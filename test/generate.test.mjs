@@ -46,6 +46,54 @@ test("generates deterministic skills and check detects drift", async () => {
   }
 });
 
+test("falls back to a labeled npm suggestion when no package manager is detected", async () => {
+  const root = await fixture();
+  try {
+    const analysis = analyzeRepository(root);
+    assert.equal(analysis.packageManager, null);
+    await generateSkills(analysis);
+    const quality = await readFile(join(root, ".claude/skills/repo-quality/references/quality.md"), "utf8");
+    assert.match(quality, /No lockfile was detected/);
+    assert.match(quality, /`npm run lint`/);
+    assert.doesNotMatch(quality, /`null /);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("uses `bun run` (not bun's native test runner) for package.json scripts", async () => {
+  const root = await fixture();
+  try {
+    await writeFile(join(root, "bun.lock"), "");
+    const analysis = analyzeRepository(root);
+    assert.equal(analysis.packageManager, "bun");
+    await generateSkills(analysis);
+    const quality = await readFile(join(root, ".claude/skills/repo-quality/references/quality.md"), "utf8");
+    assert.match(quality, /`bun run test`/);
+    assert.doesNotMatch(quality, /`bun test`/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("escapes quotes, backslashes, and newlines in the generated frontmatter description", async () => {
+  const root = await fixture();
+  try {
+    await writeFile(join(root, "package.json"), JSON.stringify({
+      name: 'weird"name\\with\nnewline',
+      scripts: { test: "node --test" },
+    }));
+    const analysis = analyzeRepository(root);
+    await generateSkills(analysis);
+    const skill = await readFile(join(root, ".claude/skills/repo-development/SKILL.md"), "utf8");
+    const frontmatterBlock = skill.split("---")[1];
+    assert.equal(frontmatterBlock.split("\n").filter(Boolean).length, 2);
+    assert.match(frontmatterBlock, /description: ".*\\"name\\\\with\\nnewline.*"/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("refuses to overwrite a manual skill", async () => {
   const root = await fixture();
   try {
