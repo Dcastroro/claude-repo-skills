@@ -103,3 +103,26 @@ test("readBounded returns empty string when the file no longer exists (ENOENT)",
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("readBounded rethrows non-ENOENT errors raised while reading the file", async (t) => {
+  if (process.getuid && process.getuid() === 0) {
+    t.skip("cannot exercise EACCES while running as root");
+    return;
+  }
+  const root = await tmp("claude-repo-skills-fs-unreadable-");
+  try {
+    const path = join(root, "secret.md");
+    await writeFile(path, "top secret");
+    // lstatSync succeeds (it does not require read permission on the file
+    // itself) but the subsequent readFileSync fails with EACCES, exercising
+    // the second try/catch's non-ENOENT rethrow path.
+    chmodSync(path, 0o000);
+    try {
+      assert.throws(() => readBounded(path, 128_000), (error) => error.code === "EACCES");
+    } finally {
+      chmodSync(path, 0o644);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

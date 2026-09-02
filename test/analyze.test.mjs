@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { chmodSync } from "node:fs";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { analyzeRepository } from "../src/analyze.mjs";
+import { defaultConfig } from "../src/config.mjs";
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "claude-repo-skills-"));
@@ -96,5 +98,43 @@ test("does not traverse symlinked directories", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("treats a malformed package.json as absent instead of throwing", async () => {
+  const root = await fixture();
+  try {
+    await writeFile(join(root, "package.json"), "{ not valid json");
+    const result = analyzeRepository(root);
+    assert.equal(result.package, null);
+    // Falls back to the directory name once package.json cannot be parsed.
+    assert.equal(result.name, result.root.split(/[\\/]/).pop());
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("skips a documentation file whose stat cannot be read instead of aborting", async (t) => {
+  if (process.getuid && process.getuid() === 0) {
+    t.skip("cannot exercise EACCES while running as root");
+    return;
+  }
+  const root = await fixture();
+  try {
+    await mkdir(join(root, "restricted"), { recursive: true });
+    await writeFile(join(root, "restricted", "README.md"), "# Unreachable");
+    // Read permission without execute (search) permission lets readdirSync
+    // list the entry but makes lstatSync on the entry fail with EACCES,
+    // exercising the defensive catch around the per-doc lstat.
+    chmodSync(join(root, "restricted"), 0o444);
+    try {
+      const config = { ...defaultConfig, includeDocs: [...defaultConfig.includeDocs, "restricted"] };
+      const result = analyzeRepository(root, { config });
+      assert.equal(result.documentContent["restricted/README.md"], undefined);
+    } finally {
+      chmodSync(join(root, "restricted"), 0o755);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

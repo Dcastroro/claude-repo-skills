@@ -86,6 +86,18 @@ test("parse resolves --version combined with --json", () => {
   });
 });
 
+test("parse recognizes -v as a leading command shorthand for --version", () => {
+  assert.equal(parse(["-v"]).command, "version");
+});
+
+test("parse recognizes -v as an option shorthand for --version", () => {
+  assert.equal(parse(["inspect", "-v"]).command, "version");
+});
+
+test("parse recognizes --help appearing after the command, not just as the first token", () => {
+  assert.deepEqual(parse(["inspect", "--help"]), { command: "help" });
+});
+
 // --- commands ---
 
 test("init creates a config file and refuses to overwrite it", async () => {
@@ -97,6 +109,17 @@ test("init creates a config file and refuses to overwrite it", async () => {
     const config = JSON.parse(await readFile(configPath, "utf8"));
     assert.equal(config.output, ".claude/skills");
     await assert.rejects(() => runCli(["init", root]), /already exists/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("init --json emits JSON with the created path", async () => {
+  const root = await mkdtemp(join(tmpdir(), "claude-repo-skills-cli-init-json-"));
+  try {
+    const { output } = await captureStdout(() => runCli(["init", root, "--json"]));
+    const parsed = JSON.parse(output);
+    assert.equal(parsed.created, join(root, ".claude-repo-skills.json"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -121,6 +144,55 @@ test("inspect --json emits parseable JSON", async () => {
     const parsed = JSON.parse(output);
     assert.equal(parsed.name, "cli-fixture");
     assert.equal(parsed.documentContent, undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("inspect prints skipped-documentation warnings in human-readable mode", async () => {
+  const root = await fixture();
+  try {
+    await writeFile(join(root, "README.md"), "x".repeat(200));
+    await writeFile(join(root, ".claude-repo-skills.json"), JSON.stringify({ maxSourceBytes: 50 }));
+    const { output } = await captureStdout(() => runCli(["inspect", root]));
+    assert.match(output, /Warnings:/);
+    assert.match(output, /README\.md/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("generate --json emits JSON with the generated file list", async () => {
+  const root = await fixture();
+  try {
+    const { output } = await captureStdout(() => runCli(["generate", root, "--json"]));
+    const parsed = JSON.parse(output);
+    assert.equal(parsed.written.length, 9);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("check --json emits JSON when generated skills are current", async () => {
+  const root = await fixture();
+  try {
+    await captureStdout(() => runCli(["generate", root]));
+    const { output, exitCode } = await captureStdout(() => runCli(["check", root, "--json"]));
+    const parsed = JSON.parse(output);
+    assert.deepEqual(parsed.stale, []);
+    assert.equal(exitCode, undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("check --json emits JSON when generated skills are missing", async () => {
+  const root = await fixture();
+  try {
+    const { output, exitCode } = await captureStdout(() => runCli(["check", root, "--json"]));
+    const parsed = JSON.parse(output);
+    assert.ok(parsed.stale.length > 0);
+    assert.equal(exitCode, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
