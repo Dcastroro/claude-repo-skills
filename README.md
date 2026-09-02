@@ -93,6 +93,12 @@ that's expected, not a bug.
 - Documentation reads are size-bounded.
 - Manual skill files are not overwritten.
 - No source code or repository content leaves the machine.
+- By design, the content of README/AGENTS/CLAUDE files and anything under
+  `includeDocs` is copied verbatim into generated skills, which Claude Code
+  loads automatically — an untrusted repository could embed instructions
+  meant to influence an agent reading those skills later. Review the output
+  of `generate --dry-run` before generating skills for a repository you do
+  not trust.
 
 ## Development
 
