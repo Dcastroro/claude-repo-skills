@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { lstatSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -164,16 +164,34 @@ ${selectedDocs(analysis, /(?:test|security|contributing)/i) || "No explicit test
   return files;
 }
 
+// existsSync + readFileSync would throw a raw EISDIR with no repository context if a directory
+// happens to sit at a path where a generated file belongs — this makes that case a clear error
+// (or, in currentState, simply "missing") instead of an uncaught crash.
+function readExistingFile(absolute) {
+  let stat;
+  try {
+    stat = lstatSync(absolute);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return { exists: false, content: null };
+    throw error;
+  }
+  if (!stat.isFile()) {
+    throw new Error(`Expected a file but found a directory at ${absolute}`);
+  }
+  return { exists: true, content: readFileSync(absolute, "utf8") };
+}
+
 function currentState(root, files) {
   const stale = [];
   const missing = [];
   for (const [path, content] of files) {
     const absolute = join(root, path);
     const expected = `${content.trim()}\n`;
-    if (!existsSync(absolute)) {
+    const existing = readExistingFile(absolute);
+    if (!existing.exists) {
       stale.push(path);
       missing.push(path);
-    } else if (readFileSync(absolute, "utf8") !== expected) {
+    } else if (existing.content !== expected) {
       stale.push(path);
     }
   }
@@ -188,9 +206,9 @@ export async function generateSkills(analysis, options = {}) {
   const written = [];
   for (const path of stale) {
     const absolute = join(analysis.root, path);
-    if (existsSync(absolute)) {
-      const current = readFileSync(absolute, "utf8");
-      if (!current.includes(MARKER_TEXT)) throw new Error(`Refusing to overwrite manual skill file: ${path}`);
+    const existing = readExistingFile(absolute);
+    if (existing.exists && !existing.content.includes(MARKER_TEXT)) {
+      throw new Error(`Refusing to overwrite manual skill file: ${path}`);
     }
     await mkdir(dirname(absolute), { recursive: true });
     writeFileSync(absolute, `${files.get(path).trim()}\n`, "utf8");

@@ -94,6 +94,21 @@ test("escapes quotes, backslashes, and newlines in the generated frontmatter des
   }
 });
 
+test("reports a clear error instead of a raw EISDIR when a directory sits at a generated file path", async () => {
+  const root = await fixture();
+  try {
+    // Something (a stray mkdir, a misconfigured output path) left a directory where
+    // generateSkills expects to find or write a plain SKILL.md file.
+    await mkdir(join(root, ".claude/skills/repo-development/SKILL.md"), { recursive: true });
+    await assert.rejects(
+      () => generateSkills(analyzeRepository(root)),
+      /Expected a file but found a directory at .*SKILL\.md/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("refuses to overwrite a manual skill", async () => {
   const root = await fixture();
   try {
