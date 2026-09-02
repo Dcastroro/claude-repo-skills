@@ -68,13 +68,23 @@ See `.claude-repo-skills.example.json` for a complete example.
 
 ## CI
 
-Commit generated skills, then detect drift:
+In a project that consumes this CLI, commit the generated skills and detect
+drift in CI:
 
 ```yaml
 - run: npx claude-repo-skills check .
 ```
 
-Regenerate after architecture, documentation, scripts or module layout changes.
+Regenerate after architecture, documentation, scripts or module layout
+changes.
+
+This repository is the exception: it generates skills from its own source
+for manual testing, but does not commit them (`.claude/skills/repo-*/` is
+gitignored) or run `check .` in its own CI — dogfooding would mean this
+project's generated skills describe the tool that generates them, which
+adds no value for anyone reading this repo. Running `check .` here locally
+will report drift whenever `src/generate.mjs` changes what gets generated;
+that's expected, not a bug.
 
 ## Security model
 
