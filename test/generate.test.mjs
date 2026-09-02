@@ -94,6 +94,39 @@ test("escapes quotes, backslashes, and newlines in the generated frontmatter des
   }
 });
 
+test("does not treat 'latest' or 'contest' as matches for the 'test' keyword in reference docs", async () => {
+  const root = await fixture();
+  try {
+    await mkdir(join(root, "docs"), { recursive: true });
+    await writeFile(join(root, "docs", "latest.md"), "# Latest release notes\nUnrelated to testing.");
+    await writeFile(join(root, "docs", "contest.md"), "# Design contest rules\nAlso unrelated to testing.");
+    await writeFile(join(root, "docs", "testing.md"), "# Testing guide\nHow to run the suite.");
+    const analysis = analyzeRepository(root);
+    await generateSkills(analysis);
+    const quality = await readFile(join(root, ".claude/skills/repo-quality/references/quality.md"), "utf8");
+    assert.doesNotMatch(quality, /Latest release notes/);
+    assert.doesNotMatch(quality, /Design contest rules/);
+    assert.match(quality, /Testing guide/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("does not duplicate AGENTS.md content into the domain reference file", async () => {
+  const root = await fixture();
+  try {
+    await writeFile(join(root, "AGENTS.md"), "# Rules\nUnique architecture marker XYZ123.");
+    const analysis = analyzeRepository(root);
+    await generateSkills(analysis);
+    const repository = await readFile(join(root, ".claude/skills/repo-development/references/repository.md"), "utf8");
+    const domain = await readFile(join(root, ".claude/skills/repo-domain/references/domain.md"), "utf8");
+    assert.match(repository, /XYZ123/);
+    assert.doesNotMatch(domain, /XYZ123/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("reports a clear error instead of a raw EISDIR when a directory sits at a generated file path", async () => {
   const root = await fixture();
   try {

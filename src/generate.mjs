@@ -38,9 +38,24 @@ function commands(analysis, wanted) {
   return matched.map((name) => `- \`${prefix} ${name}\``).join("\n");
 }
 
-function selectedDocs(analysis, pattern) {
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// A plain substring match treats "test" as present inside "latest" or "contest" — false
+// positives with no relation to testing. Requiring each keyword to start right after a path
+// separator, a dot, a hyphen/underscore, or the beginning of the path keeps legitimate matches
+// like "testing.md" or "unit-test.md" while rejecting those. `prefixes` stays a plain
+// startsWith check for whole-subtree inclusion (e.g. every file under "docs/").
+function selectedDocs(analysis, { keywords = [], prefixes = [] } = {}) {
+  const boundary = "(?:^|[/.\\-_])";
+  const patterns = keywords.map((keyword) => new RegExp(`${boundary}${escapeRegExp(keyword)}`, "i"));
   return Object.entries(analysis.documentContent)
-    .filter(([path]) => pattern.test(path))
+    .filter(
+      ([path]) =>
+        prefixes.some((prefix) => path.startsWith(prefix)) ||
+        patterns.some((pattern) => pattern.test(path)),
+    )
     .map(([path, content]) => `## ${path}\n\n${content}`)
     .join("\n\n");
 }
@@ -97,7 +112,7 @@ ${bullets(Object.keys(analysis.package?.scripts ?? {}).sort())}
 
 ## Repository instructions
 
-${selectedDocs(analysis, /(?:AGENTS|CLAUDE|architecture|code-style)/i) || "No explicit architecture instructions were discovered."}
+${selectedDocs(analysis, { keywords: ["AGENTS", "CLAUDE", "architecture", "code-style"] }) || "No explicit architecture instructions were discovered."}
 `);
     files.set(`${root}/${name}/agents/openai.yaml`, openAiYaml(name, "Repository Development", "Follow repository architecture and conventions"));
   }
@@ -122,7 +137,13 @@ ${MARKER}
 
 Generated from repository documentation. Digest: \`${analysis.digest}\`.
 
-${selectedDocs(analysis, /(?:README|AGENTS|docs\/|domain|product|security|compliance)/i) || "No domain documentation was discovered."}
+${selectedDocs(analysis, {
+  // AGENTS.md/CLAUDE.md deliberately excluded here: they already go into
+  // repo-development/references/repository.md, and duplicating their full content into this
+  // file too just bloats context for no added coverage.
+  keywords: ["README", "domain", "product", "security", "compliance"],
+  prefixes: ["docs/"],
+}) || "No domain documentation was discovered."}
 `);
     files.set(`${root}/${name}/agents/openai.yaml`, openAiYaml(name, "Repository Domain", "Apply product and domain invariants safely"));
   }
@@ -157,7 +178,7 @@ ${bullets(analysis.tests)}
 
 ## Testing and security instructions
 
-${selectedDocs(analysis, /(?:test|security|contributing)/i) || "No explicit testing instructions were discovered."}
+${selectedDocs(analysis, { keywords: ["test", "security", "contributing"] }) || "No explicit testing instructions were discovered."}
 `);
     files.set(`${root}/${name}/agents/openai.yaml`, openAiYaml(name, "Repository Quality", "Run the correct checks and assess risk"));
   }
