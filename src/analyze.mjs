@@ -8,6 +8,10 @@ const MANIFESTS = ["package.json", "pyproject.toml", "Cargo.toml", "go.mod", "po
 const DOC_NAMES = new Set(["AGENTS.md", "CLAUDE.md", "README.md", "CONTRIBUTING.md", "SECURITY.md"]);
 const NESTED_DOC_NAMES = new Set(["README.md", "AGENTS.md", "CLAUDE.md"]);
 const NESTED_DOC_ROOTS = new Set(["packages", "apps"]);
+// config.includeDocs points at an arbitrary directory (unlike DOC_NAMES/NESTED_DOC_NAMES, which
+// only ever match fixed .md filenames): without an extension allowlist, any file underneath it —
+// a diagram, a font, a zip — gets swept in and its bytes get decoded as UTF-8 text below.
+const TEXT_DOC_EXTENSIONS = new Set([".md", ".mdx", ".txt"]);
 
 function packageManager(root) {
   if (existsSync(join(root, "pnpm-lock.yaml"))) return "pnpm";
@@ -33,7 +37,7 @@ function languageCounts(paths) {
   return Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]));
 }
 
-function readPackage(root) {
+function readPackage(root, warnings) {
   const path = join(root, "package.json");
   if (!existsSync(path)) return null;
   try {
@@ -46,14 +50,24 @@ function readPackage(root) {
       devDependencies: Object.keys(value.devDependencies ?? {}).sort(),
       engines: value.engines ?? {},
     };
-  } catch {
+  } catch (error) {
+    // Falling through to `pkg?.name ?? basename(resolvedRoot)` below is fine as a fallback
+    // repository name, but doing so silently — with package.json present but unreadable — used
+    // to look identical to a repository with no package.json at all. Surface it instead.
+    const reason = error instanceof Error ? error.message : String(error);
+    warnings.push(`Could not read package.json: ${reason}`);
     return null;
   }
 }
 
 function isDocumentation(path, config) {
   if (DOC_NAMES.has(path)) return true;
-  if (config.includeDocs.some((source) => path === source || path.startsWith(`${source}/`))) return true;
+  if (
+    TEXT_DOC_EXTENSIONS.has(extname(path)) &&
+    config.includeDocs.some((source) => path === source || path.startsWith(`${source}/`))
+  ) {
+    return true;
+  }
   // Monorepo packages/apps directories carry their own README/AGENTS/CLAUDE
   // files that are otherwise invisible because DOC_NAMES only matches
   // root-level paths.
@@ -88,10 +102,20 @@ export function analyzeRepository(rootInput = ".", options = {}) {
       continue;
     }
     const content = readBounded(absolute, config.maxSourceBytes);
-    if (content) documentContent[path] = content.trim();
+    if (!content) continue;
+    // Second line of defense past the TEXT_DOC_EXTENSIONS check above: a binary file can still
+    // carry one of those extensions by mistake. readFileSync("utf8") never throws on invalid
+    // UTF-8 (it silently emits U+FFFD replacement characters), so garbage would otherwise flow
+    // straight into the generated skill instead of being caught here. A NUL byte cannot appear
+    // in valid UTF-8 text, so its presence is a reliable binary signal.
+    if (content.includes("\u0000")) {
+      warnings.push(`Skipped ${path}: file appears to be binary (contains a NUL byte)`);
+      continue;
+    }
+    documentContent[path] = content.trim();
   }
 
-  const pkg = readPackage(resolvedRoot);
+  const pkg = readPackage(resolvedRoot, warnings);
   const manifests = MANIFESTS.filter((name) => paths.includes(name));
   const pm = packageManager(resolvedRoot);
 

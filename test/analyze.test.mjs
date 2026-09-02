@@ -101,7 +101,7 @@ test("does not traverse symlinked directories", async () => {
   }
 });
 
-test("treats a malformed package.json as absent instead of throwing", async () => {
+test("treats a malformed package.json as absent instead of throwing, and warns about it", async () => {
   const root = await fixture();
   try {
     await writeFile(join(root, "package.json"), "{ not valid json");
@@ -109,6 +109,37 @@ test("treats a malformed package.json as absent instead of throwing", async () =
     assert.equal(result.package, null);
     // Falls back to the directory name once package.json cannot be parsed.
     assert.equal(result.name, result.root.split(/[\\/]/).pop());
+    assert.ok(result.warnings.some((warning) => warning.includes("package.json")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("does not read a binary file under an includeDocs directory as text", async () => {
+  const root = await fixture();
+  try {
+    await mkdir(join(root, "docs"), { recursive: true });
+    // A minimal PNG signature followed by junk bytes: not valid UTF-8 text, and it happens to
+    // carry a NUL byte, which is what the second line of defense in analyze.mjs detects.
+    await writeFile(join(root, "docs", "diagram.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d, 0x0a]));
+    const result = analyzeRepository(root);
+    assert.equal(result.documentContent["docs/diagram.png"], undefined);
+    assert.ok(!result.docs.includes("docs/diagram.png"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("skips a text-named file under includeDocs whose content is actually binary, with a warning", async () => {
+  const root = await fixture();
+  try {
+    await mkdir(join(root, "docs"), { recursive: true });
+    // Extension is allowlisted (.md), but the bytes inside are not valid text — the NUL-byte
+    // check must catch what the extension allowlist alone cannot.
+    await writeFile(join(root, "docs", "notes.md"), Buffer.from([0x25, 0x00, 0x50, 0x44, 0x46]));
+    const result = analyzeRepository(root);
+    assert.equal(result.documentContent["docs/notes.md"], undefined);
+    assert.ok(result.warnings.some((warning) => warning.includes("docs/notes.md") && warning.includes("binary")));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
