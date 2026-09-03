@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "test": "node --test",
-    "lint": "node --check bin/claude-repo-skills.mjs && node --check src/*.mjs",
+    "lint": "node --check bin/claude-repo-skills.mjs && node --check src/analyze.mjs && node --check src/cli.mjs && node --check src/config.mjs && node --check src/fs-safe.mjs && node --check src/generate.mjs && node --check src/index.mjs",
     "check": "npm run lint && npm test",
     "demo": "node bin/claude-repo-skills.mjs inspect ."
   },
