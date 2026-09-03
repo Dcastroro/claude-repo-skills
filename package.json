@@ -4,7 +4,7 @@
   "description": "Generate repository-aware Claude Code skills from real project structure and conventions.",
   "type": "module",
   "bin": {
-    "claude-repo-skills": "./bin/claude-repo-skills.mjs"
+    "claude-repo-skills": "bin/claude-repo-skills.mjs"
   },
   "exports": {
     ".": "./src/index.mjs"
