@@ -1,6 +1,6 @@
 {
   "name": "claude-repo-skills",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Generate repository-aware Claude Code skills from real project structure and conventions.",
   "type": "module",
   "bin": {
@@ -19,7 +19,9 @@
     "test": "node --test",
     "lint": "node --check bin/claude-repo-skills.mjs && node --check src/analyze.mjs && node --check src/cli.mjs && node --check src/config.mjs && node --check src/fs-safe.mjs && node --check src/generate.mjs && node --check src/index.mjs",
     "check": "npm run lint && npm test",
-    "demo": "node bin/claude-repo-skills.mjs inspect ."
+    "demo": "node bin/claude-repo-skills.mjs inspect .",
+    "repo:check": "node scripts/repository-check.mjs",
+    "release:build": "node scripts/build-release.mjs"
   },
   "engines": {
     "node": ">=20"

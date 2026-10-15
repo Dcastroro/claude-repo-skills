@@ -106,3 +106,9 @@ that's expected, not a bug.
 npm install
 npm run check
 ```
+
+## Repository and release checks
+
+Run `npm run repo:check` before committing. Source releases are built from a
+clean, tested tag and include a checksum and commit manifest. See
+[RELEASING.md](RELEASING.md) for validation, publication and maintenance.

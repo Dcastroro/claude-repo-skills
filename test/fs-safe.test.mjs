@@ -25,6 +25,10 @@ test("walkFiles returns repository-relative paths using forward slashes", async 
 });
 
 test("walkFiles skips directories it cannot read instead of aborting", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX permission simulation requires Linux or macOS");
+    return;
+  }
   if (process.getuid && process.getuid() === 0) {
     t.skip("cannot exercise EACCES while running as root");
     return;
@@ -81,13 +85,21 @@ test("readBounded returns empty string when the file exceeds maxBytes", async ()
   }
 });
 
-test("readBounded returns empty string for a symlink to a file", async () => {
+test("readBounded returns empty string for a symlink to a file", async (t) => {
   const root = await tmp("claude-repo-skills-fs-symlink-");
   try {
     const target = join(root, "real.md");
     await writeFile(target, "real content");
     const link = join(root, "link.md");
-    await symlink(target, link);
+    try {
+      await symlink(target, link);
+    } catch (error) {
+      if (process.platform === "win32" && ["EPERM", "EACCES"].includes(error.code)) {
+        t.skip("Creating file symlinks requires additional Windows privileges");
+        return;
+      }
+      throw error;
+    }
     assert.equal(readBounded(link, 128_000), "");
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -105,6 +117,10 @@ test("readBounded returns empty string when the file no longer exists (ENOENT)",
 });
 
 test("readBounded rethrows non-ENOENT errors raised while reading the file", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX permission simulation requires Linux or macOS");
+    return;
+  }
   if (process.getuid && process.getuid() === 0) {
     t.skip("cannot exercise EACCES while running as root");
     return;

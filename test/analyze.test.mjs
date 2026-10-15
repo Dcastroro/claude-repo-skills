@@ -92,7 +92,7 @@ test("does not traverse symlinked directories", async () => {
   const outside = await mkdtemp(join(tmpdir(), "claude-repo-skills-outside-"));
   try {
     await writeFile(join(outside, "secret.ts"), "secret");
-    await symlink(outside, join(root, "linked"));
+    await symlink(outside, join(root, "linked"), process.platform === "win32" ? "junction" : "dir");
     const result = analyzeRepository(root);
     assert.equal(result.languages.TypeScript, 1);
   } finally {
@@ -146,6 +146,10 @@ test("skips a text-named file under includeDocs whose content is actually binary
 });
 
 test("skips a documentation file whose stat cannot be read instead of aborting", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX permission simulation requires Linux or macOS");
+    return;
+  }
   if (process.getuid && process.getuid() === 0) {
     t.skip("cannot exercise EACCES while running as root");
     return;

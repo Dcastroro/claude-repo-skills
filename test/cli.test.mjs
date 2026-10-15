@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { parse, runCli } from "../src/cli.mjs";
 
@@ -51,7 +51,7 @@ test("parse rejects unknown options", () => {
 
 test("parse keeps the last of two positional repository arguments", () => {
   const args = parse(["inspect", "/first", "/second"]);
-  assert.equal(args.root, "/second");
+  assert.equal(args.root, resolve("/second"));
 });
 
 test("parse recognizes --json and --dry-run regardless of order", () => {
