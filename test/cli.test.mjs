@@ -49,6 +49,11 @@ test("parse rejects unknown options", () => {
   assert.throws(() => parse(["inspect", "--nope"]), /Unknown option: --nope/);
 });
 
+test("parse rejects --config without a path", () => {
+  assert.throws(() => parse(["check", "--config"]), /--config requires a path/);
+  assert.throws(() => parse(["check", "--config", "--json"]), /--config requires a path/);
+});
+
 test("parse keeps the last of two positional repository arguments", () => {
   const args = parse(["inspect", "/first", "/second"]);
   assert.equal(args.root, resolve("/second"));

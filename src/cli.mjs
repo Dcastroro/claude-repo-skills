@@ -35,7 +35,10 @@ export function parse(argv) {
   let json = false;
   while (values.length) {
     const value = values.shift();
-    if (value === "--config") configPath = values.shift();
+    if (value === "--config") {
+      configPath = values.shift();
+      if (!configPath || configPath.startsWith("-")) throw new Error("--config requires a path");
+    }
     else if (value === "--dry-run") dryRun = true;
     else if (value === "--json") json = true;
     else if (value === "--help") return { command: "help" };
